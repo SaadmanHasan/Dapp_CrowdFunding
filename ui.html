@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Decentralized Crowdfunding with MetaMask</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding-top: 20px;
+        }
+        .campaign-card {
+            margin-bottom: 20px;
+            transition: transform 0.2s;
+        }
+        .campaign-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        .progress {
+            height: 25px;
+        }
+        .connect-wallet-btn {
+            margin-left: 10px;
+        }
+        .feature-section {
+            padding: 40px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .campaign-image {
+            height: 200px;
+            object-fit: cover;
+        }
+        .error-message {
+            color: red;
+            margin-top: 5px;
+        }
+        #walletAddress {
+            font-family: monospace;
+        }
+        .network-indicator {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            margin-left: 10px;
+        }
+        .network-mainnet {
+            background-color: #29b6af;
+            color: white;
+        }
+        .network-testnet {
+            background-color: #ffb347;
+            color: black;
+        }
+        .network-unknown {
+            background-color: #cccccc;
+            color: black;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Navigation -->
+        <nav class="navbar navbar-expand-lg navbar-light bg-light rounded mb-4">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="#">Decentralized Crowdfunding</a>
+                <div class="d-flex align-items-center">
+                    <span id="networkIndicator" class="network-indicator d-none">Network</span>
+                    <button id="connectWalletBtn" class="btn btn-primary connect-wallet-btn">Connect Wallet</button>
+                    <span id="walletAddress" class="ms-2"></span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Wallet Connection Info -->
+        <div id="walletNotConnectedAlert" class="alert alert-warning d-none">
+            <strong>Wallet not connected!</strong> Please connect your MetaMask wallet to interact with the platform.
+        </div>
+
+        <!-- Create Campaign Form -->
+        <div class="feature-section">
+            <h2 class="mb-4">Create New Campaign</h2>
+            <div class="card">
+                <div class="card-body">
+                    <form id="createCampaignForm">
+                        <div class="mb-3">
+                            <label for="campaignTitle" class="form-label">Title</label>
+                            <input type="text" class="form-control" id="campaignTitle" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="campaignDescription" class="form-label">Description</label>
+                            <textarea class="form-control" id="campaignDescription" rows="3" required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="campaignGoal" class="form-label">Goal Amount (ETH)</label>
+                            <input type="number" class="form-control" id="campaignGoal" step="0.01" min="0.01" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="campaignDuration" class="form-label">Duration (Days)</label>
+                            <input type="number" class="form-control" id="campaignDuration" min="1" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="campaignImage" class="form-label">Image URL (optional)</label>
+                            <input type="text" class="form-control" id="campaignImage">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Create Campaign</button>
+                        <div id="createCampaignError" class="error-message"></div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Campaigns -->
+        <div class="feature-section">
+            <h2 class="mb-4">Active Campaigns</h2>
+            <div id="campaignsContainer" class="row">
+                <!-- Campaign cards will be loaded here -->
+                <div class="col-12 text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p>Loading campaigns...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Campaign Details Modal -->
+        <div class="modal fade" id="campaignModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="campaignModalTitle">Campaign Details</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <img id="modalCampaignImage" src="https://via.placeholder.com/400x300" class="img-fluid rounded mb-3 campaign-image" alt="Campaign Image">
+                                <h4 id="modalCampaignTitle"></h4>
+                                <p id="modalCampaignDescription" class="text-muted"></p>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <strong>Creator:</strong> <span id="modalCampaignCreator"></span>
+                                </div>
+                                <div class="mb-3">
+                                    <strong>Goal:</strong> <span id="modalCampaignGoal"></span> ETH
+                                </div>
+                                <div class="mb-3">
+                                    <strong>Raised:</strong> <span id="modalCampaignRaised"></span> ETH
+                                </div>
+                                <div class="mb-3">
+                                    <strong>Deadline:</strong> <span id="modalCampaignDeadline"></span>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="progress">
+                                        <div id="modalCampaignProgress" class="progress-bar" role="progressbar"></div>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <strong>Status:</strong> <span id="modalCampaignStatus"></span>
+                                </div>
+                                
+                                <!-- Contribution Form -->
+                                <div id="contributionSection" class="mb-4">
+                                    <h5>Contribute to this campaign</h5>
+                                    <form id="contributeForm">
+                                        <div class="input-group mb-3">
+                                            <input type="number" class="form-control" id="contributionAmount" placeholder="Amount in ETH" step="0.01" min="0.01">
+                                            <button class="btn btn-primary" type="submit">Donate</button>
+                                        </div>
+                                        <div id="contributionError" class="error-message"></div>
+                                    </form>
+                                </div>
+                                
+                                <!-- Withdraw/Refund Buttons -->
+                                <div id="withdrawRefundSection">
+                                    <button id="withdrawFundsBtn" class="btn btn-success mb-2" style="display: none;">Withdraw Funds</button>
+                                    <button id="requestRefundBtn" class="btn btn-warning" style="display: none;">Request Refund</button>
+                                    <div id="withdrawRefundError" class="error-message mt-2"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.8.0/dist/web3.min.js"></script>
+    <script>
+        // Contract ABI (replace with your actual ABI)
+        const contractABI = [
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "campaignId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "creator",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "title",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "goalAmount",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "deadline",
+				"type": "uint256"
+			}
+		],
+		"name": "CampaignCreated",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "campaignId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "contributor",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "ContributionMade",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "campaignId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "FundsWithdrawn",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "campaignId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "contributor",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "RefundIssued",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_campaignId",
+				"type": "uint256"
+			}
+		],
+		"name": "contribute",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_title",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_description",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_goalAmount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_durationInDays",
+				"type": "uint256"
+			}
+		],
+		"name": "createCampaign",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_campaignId",
+				"type": "uint256"
+			}
+		],
+		"name": "requestRefund",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_campaignId",
+				"type": "uint256"
+			}
+		],
+		"name": "withdrawFunds",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "campaignCount",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "campaigns",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "creator",
+				"type": "address"
+			},
+			{
+				"internalType": "string",
+				"name": "title",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "description",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "goalAmount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "deadline",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "fundsRaised",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "goalReached",
+				"type": "bool"
+			},
+			{
+				"internalType": "bool",
+				"name": "isWithdrawn",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_campaignId",
+				"type": "uint256"
+			}
+		],
+		"name": "getCampaign",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "creator",
+				"type": "address"
+			},
+			{
+				"internalType": "string",
+				"name": "title",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "description",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "goalAmount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "fundsRaised",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "deadline",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "goalReached",
+				"type": "bool"
+			},
+			{
+				"internalType": "bool",
+				"name": "isWithdrawn",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+];
+
+        // Contract address (replace with your deployed contract address)
+        const contractAddress = "0x5f1cd03172961775DE168C39022744bc985e46aa"; // Replace with your contract address
+
+        // Network configurations
+        const networkConfigs = {
+            1: { name: "Ethereum Mainnet", class: "network-mainnet" },
+            5: { name: "Goerli Testnet", class: "network-testnet" },
+            11155111: { name: "Sepolia Testnet", class: "network-testnet" },
+            default: { name: "Unknown Network", class: "network-unknown" }
+        };
+
+        let web3;
+        let contract;
+        let accounts = [];
+        let currentCampaignId = null;
+        let currentChainId = null;
+        const campaignModal = new bootstrap.Modal(document.getElementById('campaignModal'));
+
+        // Initialize Web3 and contract
+        async function initWeb3() {
+            if (window.ethereum) {
+                web3 = new Web3(window.ethereum);
+                
+                try {
+                    // Request account access
+                    accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    
+                    // Get current chain ID
+                    currentChainId = await web3.eth.getChainId();
+                    updateNetworkIndicator();
+                    
+                    // Initialize contract
+                    contract = new web3.eth.Contract(contractABI, contractAddress);
+                    
+                    // Update UI
+                    updateWalletUI();
+                    
+                    // Load campaigns
+                    loadCampaigns();
+                    
+                    // Set up event listeners
+                    setupEventListeners();
+                    
+                } catch (error) {
+                    console.error("User denied account access:", error);
+                    showError("Please connect your MetaMask wallet to continue");
+                }
+            } else {
+                showError('Please install MetaMask to use this dApp!');
+                // Optionally provide a link to MetaMask
+                // window.open('https://metamask.io/download.html', '_blank');
+            }
+        }
+
+        // Set up event listeners
+        function setupEventListeners() {
+            // Account changes
+            window.ethereum.on('accountsChanged', (newAccounts) => {
+                accounts = newAccounts;
+                updateWalletUI();
+                loadCampaigns();
+            });
+            
+            // Chain changes
+            window.ethereum.on('chainChanged', (chainId) => {
+                // Convert chainId from hex to decimal
+                currentChainId = parseInt(chainId, 16);
+                updateNetworkIndicator();
+                window.location.reload();
+            });
+            
+            // Disconnect
+            window.ethereum.on('disconnect', (error) => {
+                console.log('MetaMask disconnected', error);
+                accounts = [];
+                updateWalletUI();
+            });
+        }
+
+        // Update wallet UI
+        function updateWalletUI() {
+            const walletAddressElement = document.getElementById('walletAddress');
+            const connectButton = document.getElementById('connectWalletBtn');
+            const walletAlert = document.getElementById('walletNotConnectedAlert');
+            
+            if (accounts.length > 0) {
+                const shortAddress = `${accounts[0].substring(0, 6)}...${accounts[0].substring(38)}`;
+                walletAddressElement.textContent = shortAddress;
+                connectButton.textContent = 'Connected';
+                connectButton.classList.remove('btn-primary');
+                connectButton.classList.add('btn-success');
+                walletAlert.classList.add('d-none');
+            } else {
+                walletAddressElement.textContent = '';
+                connectButton.textContent = 'Connect Wallet';
+                connectButton.classList.remove('btn-success');
+                connectButton.classList.add('btn-primary');
+                walletAlert.classList.remove('d-none');
+            }
+        }
+
+        // Update network indicator
+        function updateNetworkIndicator() {
+            const networkIndicator = document.getElementById('networkIndicator');
+            const networkInfo = networkConfigs[currentChainId] || networkConfigs.default;
+            
+            networkIndicator.textContent = networkInfo.name;
+            networkIndicator.className = `network-indicator ${networkInfo.class}`;
+            networkIndicator.classList.remove('d-none');
+        }
+
+        // Show error message
+        function showError(message) {
+            const errorElement = document.createElement('div');
+            errorElement.className = 'alert alert-danger mt-3';
+            errorElement.textContent = message;
+            
+            // Add to top of the container
+            document.querySelector('.container').prepend(errorElement);
+            
+            // Remove after 5 seconds
+            setTimeout(() => {
+                errorElement.remove();
+            }, 5000);
+        }
+
+        // Load all campaigns
+        async function loadCampaigns() {
+            if (!contract) return;
+            
+            try {
+                const count = await contract.methods.campaignCount().call();
+                const campaignsContainer = document.getElementById('campaignsContainer');
+                
+                // Show loading state
+                campaignsContainer.innerHTML = '<div class="col-12 text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p>Loading campaigns...</p></div>';
+                
+                // If no campaigns
+                if (count == 0) {
+                    campaignsContainer.innerHTML = '<div class="col-12 text-center"><p>No campaigns found. Create the first one!</p></div>';
+                    return;
+                }
+                
+                // Load each campaign
+                let campaignsHTML = '';
+                for (let i = 1; i <= count; i++) {
+                    const campaign = await contract.methods.getCampaign(i).call();
+                    
+                    // Convert deadline from timestamp to readable date
+                    const deadlineDate = new Date(campaign.deadline * 1000);
+                    const deadlineStr = deadlineDate.toLocaleDateString();
+                    
+                    // Calculate progress percentage
+                    const progress = (campaign.fundsRaised / campaign.goalAmount) * 100;
+                    const progressPercent = Math.min(100, progress).toFixed(2);
+                    
+                    // Determine status
+                    const now = Math.floor(Date.now() / 1000);
+                    let status = 'Active';
+                    if (now > campaign.deadline) {
+                        status = campaign.goalReached ? 'Successful' : 'Failed';
+                    }
+                    
+                    // Create campaign card
+                    campaignsHTML += `
+                        <div class="col-md-4">
+                            <div class="card campaign-card">
+                                <img src="https://via.placeholder.com/300x200?text=${encodeURIComponent(campaign.title)}" class="card-img-top campaign-image" alt="Campaign Image">
+                                <div class="card-body">
+                                    <h5 class="card-title">${campaign.title}</h5>
+                                    <p class="card-text text-muted">${campaign.description.substring(0, 100)}...</p>
+                                    <div class="progress mb-2">
+                                        <div class="progress-bar" role="progressbar" style="width: ${progressPercent}%"></div>
+                                    </div>
+                                    <p class="mb-1"><strong>${web3.utils.fromWei(campaign.fundsRaised, 'ether')} ETH</strong> raised of ${web3.utils.fromWei(campaign.goalAmount, 'ether')} ETH</p>
+                                    <p class="mb-1"><strong>Deadline:</strong> ${deadlineStr}</p>
+                                    <p class="mb-3"><strong>Status:</strong> ${status}</p>
+                                    <button class="btn btn-primary view-campaign-btn" data-id="${i}">View Details</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                campaignsContainer.innerHTML = campaignsHTML;
+                
+                // Add event listeners to view buttons
+                document.querySelectorAll('.view-campaign-btn').forEach(button => {
+                    button.addEventListener('click', async function() {
+                        currentCampaignId = this.getAttribute('data-id');
+                        await showCampaignDetails(currentCampaignId);
+                        campaignModal.show();
+                    });
+                });
+                
+            } catch (error) {
+                console.error("Error loading campaigns:", error);
+                showError("Failed to load campaigns. Please try again.");
+            }
+        }
+
+        // Show campaign details in modal
+        async function showCampaignDetails(campaignId) {
+            if (!contract || !accounts.length) return;
+            
+            try {
+                const campaign = await contract.methods.getCampaign(campaignId).call();
+                const now = Math.floor(Date.now() / 1000);
+                const isCampaignEnded = now > campaign.deadline;
+                const isCreator = accounts[0].toLowerCase() === campaign.creator.toLowerCase();
+                
+                // Update modal content
+                document.getElementById('modalCampaignTitle').textContent = campaign.title;
+                document.getElementById('modalCampaignDescription').textContent = campaign.description;
+                document.getElementById('modalCampaignCreator').textContent = `${campaign.creator.substring(0, 6)}...${campaign.creator.substring(38)}`;
+                document.getElementById('modalCampaignGoal').textContent = web3.utils.fromWei(campaign.goalAmount, 'ether');
+                document.getElementById('modalCampaignRaised').textContent = web3.utils.fromWei(campaign.fundsRaised, 'ether');
+                document.getElementById('modalCampaignDeadline').textContent = new Date(campaign.deadline * 1000).toLocaleString();
+                
+                // Update progress bar
+                const progress = (campaign.fundsRaised / campaign.goalAmount) * 100;
+                const progressPercent = Math.min(100, progress).toFixed(2);
+                document.getElementById('modalCampaignProgress').style.width = `${progressPercent}%`;
+                document.getElementById('modalCampaignProgress').textContent = `${progressPercent}%`;
+                
+                // Update status
+                let status = 'Active';
+                if (isCampaignEnded) {
+                    status = campaign.goalReached ? 'Successful - Goal Reached' : 'Failed - Goal Not Reached';
+                }
+                document.getElementById('modalCampaignStatus').textContent = status;
+                
+                // Show/hide contribution section
+                const contributionSection = document.getElementById('contributionSection');
+                if (isCampaignEnded) {
+                    contributionSection.style.display = 'none';
+                } else {
+                    contributionSection.style.display = 'block';
+                }
+                
+                // Show/hide withdraw and refund buttons
+                const withdrawBtn = document.getElementById('withdrawFundsBtn');
+                const refundBtn = document.getElementById('requestRefundBtn');
+                
+                if (isCreator) {
+                    // Show withdraw button if campaign ended and goal reached
+                    if (isCampaignEnded && campaign.goalReached && !campaign.isWithdrawn) {
+                        withdrawBtn.style.display = 'block';
+                    } else {
+                        withdrawBtn.style.display = 'none';
+                    }
+                } else {
+                    withdrawBtn.style.display = 'none';
+                }
+                
+                // Show refund button if campaign ended and goal not reached
+                if (isCampaignEnded && !campaign.goalReached) {
+                    refundBtn.style.display = 'block';
+                } else {
+                    refundBtn.style.display = 'none';
+                }
+                
+            } catch (error) {
+                console.error("Error loading campaign details:", error);
+                showError("Failed to load campaign details. Please try again.");
+            }
+        }
+
+        // Event Listeners
+        document.getElementById('connectWalletBtn').addEventListener('click', initWeb3);
+        
+        // Create campaign form
+        document.getElementById('createCampaignForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!contract || !accounts.length) {
+                showError('Please connect your wallet first');
+                return;
+            }
+            
+            const title = document.getElementById('campaignTitle').value;
+            const description = document.getElementById('campaignDescription').value;
+            const goalAmount = document.getElementById('campaignGoal').value;
+            const durationInDays = document.getElementById('campaignDuration').value;
+            const imageUrl = document.getElementById('campaignImage').value;
+            
+            try {
+                // Convert ETH to Wei
+                const goalAmountWei = web3.utils.toWei(goalAmount, 'ether');
+                
+                await contract.methods.createCampaign(
+                    title,
+                    description,
+                    goalAmountWei,
+                    durationInDays
+                ).send({ from: accounts[0] });
+                
+                // Clear form
+                this.reset();
+                document.getElementById('createCampaignError').textContent = '';
+                
+                // Reload campaigns
+                loadCampaigns();
+                
+                // Show success message
+                showError('Campaign created successfully!');
+                
+            } catch (error) {
+                console.error("Error creating campaign:", error);
+                document.getElementById('createCampaignError').textContent = error.message;
+            }
+        });
+        
+        // Contribute form
+        document.getElementById('contributeForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!contract || !accounts.length || !currentCampaignId) {
+                showError('Please connect your wallet and select a campaign');
+                return;
+            }
+            
+            const amount = document.getElementById('contributionAmount').value;
+            
+            try {
+                // Convert ETH to Wei
+                const amountWei = web3.utils.toWei(amount, 'ether');
+                
+                await contract.methods.contribute(currentCampaignId)
+                    .send({ 
+                        from: accounts[0], 
+                        value: amountWei 
+                    });
+                
+                // Clear form
+                this.reset();
+                document.getElementById('contributionError').textContent = '';
+                
+                // Reload campaign details
+                await showCampaignDetails(currentCampaignId);
+                loadCampaigns();
+                
+                // Show success message
+                showError('Contribution successful! Thank you!');
+                
+            } catch (error) {
+                console.error("Error contributing:", error);
+                document.getElementById('contributionError').textContent = error.message;
+            }
+        });
+        
+        // Withdraw funds button
+        document.getElementById('withdrawFundsBtn').addEventListener('click', async function() {
+            if (!contract || !accounts.length || !currentCampaignId) return;
+            
+            try {
+                await contract.methods.withdrawFunds(currentCampaignId)
+                    .send({ from: accounts[0] });
+                
+                document.getElementById('withdrawRefundError').textContent = '';
+                
+                // Reload campaign details
+                await showCampaignDetails(currentCampaignId);
+                loadCampaigns();
+                
+                // Show success message
+                showError('Funds withdrawn successfully!');
+                
+            } catch (error) {
+                console.error("Error withdrawing funds:", error);
+                document.getElementById('withdrawRefundError').textContent = error.message;
+            }
+        });
+        
+        // Request refund button
+        document.getElementById('requestRefundBtn').addEventListener('click', async function() {
+            if (!contract || !accounts.length || !currentCampaignId) return;
+            
+            try {
+                await contract.methods.requestRefund(currentCampaignId)
+                    .send({ from: accounts[0] });
+                
+                document.getElementById('withdrawRefundError').textContent = '';
+                
+                // Reload campaign details
+                await showCampaignDetails(currentCampaignId);
+                loadCampaigns();
+                
+                // Show success message
+                showError('Refund requested successfully!');
+                
+            } catch (error) {
+                console.error("Error requesting refund:", error);
+                document.getElementById('withdrawRefundError').textContent = error.message;
+            }
+        });
+
+        // Initialize the app when the page loads
+        window.addEventListener('load', () => {
+            // Check if MetaMask is installed
+            if (typeof window.ethereum !== 'undefined') {
+                // Try to connect automatically
+                initWeb3();
+            } else {
+                // Show message to install MetaMask
+                document.getElementById('walletNotConnectedAlert').classList.remove('d-none');
+                document.getElementById('walletNotConnectedAlert').innerHTML = 
+                    '<strong>MetaMask not detected!</strong> Please install MetaMask to use this dApp. ' +
+                    '<a href="https://metamask.io/download.html" target="_blank">Download MetaMask</a>';
+            }
+        });
+    </script>
+</body>
+</html>
